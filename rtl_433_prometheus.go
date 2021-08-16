@@ -56,7 +56,7 @@ Matchers:
 	channelMatchers = make(locationMatchers)
 	idMatchers      = make(locationMatchers)
 
-	labels = []string{"model", "id", "channel", "location"}
+	labels = []string{"model", "id", "channel", "location", "protocol", "mod"}
 
 	watts = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -114,6 +114,10 @@ type Message struct {
 	// Channel sensor is transmitting on. Typically 1-3, controlled by a switch on the device
 	// Either an int or string
 	RawChannel interface{} `json:"channel"`
+	// Protocol
+	Protocol int `json:"protocol"`
+	// Modulation
+	Modulation string `json:"mod"`
 	// Battery status, typically "LOW" or "OK" or "", case-insensitive.
 	RawBattery interface{} `json:"battery"`
 	// Alternative battery key. 1 or 0 or nil (not present)
@@ -229,7 +233,7 @@ func run(r io.Reader) error {
 			location = channelMatchers[locationMatcher{Model: msg.Model, Matcher: channel}]
 		}
 
-		labels := []string{msg.Model, id, channel, location}
+		labels := []string{msg.Model, id, channel, location, fmt.Sprintf("%d", int(msg.Protocol)), msg.Modulation}
 		packetsReceived.WithLabelValues(labels...).Inc()
 		timestamp.WithLabelValues(labels...).SetToCurrentTime()
 		if t := msg.TemperatureC; t != nil {
