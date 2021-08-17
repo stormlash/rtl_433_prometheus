@@ -52,7 +52,7 @@ Matchers:
 </p>`))
 
 	addr            = flag.String("listen", ":9550", "Address to listen on")
-	subprocess      = flag.String("subprocess", "rtl_433 -F json", "What command to run to get rtl_433 radio packets")
+	subprocess      = flag.String("subprocess", "rtl_433 -F json -M time -M protocol -M level", "What command to run to get rtl_433 radio packets")
 	channelMatchers = make(locationMatchers)
 	idMatchers      = make(locationMatchers)
 
@@ -64,6 +64,34 @@ Matchers:
 			Help: "Instantaneous power in watts.",
 		},
 		[]string{"model", "id", "channel", "location"},
+	)
+	frequency = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "rtl_433_frequency",
+			Help: "Transmit Frequency (MHz)",
+		},
+		labels,
+	)
+	rssi = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "rtl_433_rssi",
+			Help: "Transmit RSSI (dB)",
+		},
+		labels,
+	)
+	snr = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "rtl_433_snr",
+			Help: "Transmit SNR (dB)",
+		},
+		labels,
+	)
+	noise = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "rtl_433_noise",
+			Help: "Transmit Noise (db)",
+		},
+		labels,
 	)
 	packetsReceived = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -130,6 +158,14 @@ type Message struct {
 	TemperatureF *float64 `json:"temperature_F"`
 	// Humidity (0-100). Nil if not present in initial JSON.
 	Humidity *int32 `json:"humidity"`
+	// Frequency. Nil if not present in initial JSON.
+	Frequency *float64 `json:"freq"`
+	// RSSI. Nil if not present in initial JSON.
+	RSSI *float64 `json:"rssi"`
+	// SNR. Nil if not present in initial JSON.
+	SNR *float64 `json:"snr"`
+	// Noise. Nil if not present in initial JSON.
+	Noise *float64 `json:"noise"`
 	// Power on channel 0 (Watts)
 	Power0W *int32 `json:"power0_W"`
 	// Power on channel 0 (Watts)
@@ -233,6 +269,8 @@ func run(r io.Reader) error {
 			location = channelMatchers[locationMatcher{Model: msg.Model, Matcher: channel}]
 		}
 
+		// log.Printf("Got message %q", line)
+
 		labels := []string{msg.Model, id, channel, location, fmt.Sprintf("%d", int(msg.Protocol)), msg.Modulation}
 		packetsReceived.WithLabelValues(labels...).Inc()
 		timestamp.WithLabelValues(labels...).SetToCurrentTime()
@@ -258,6 +296,18 @@ func run(r io.Reader) error {
 		} else if b := msg.BatteryLow; b != nil {
 			battery.WithLabelValues(labels...).Set(float64(1 - *b))
 		}
+		if f := msg.Frequency; f != nil {
+			frequency.WithLabelValues(labels...).Set(float64(*f))
+		}
+		if r := msg.RSSI; r != nil {
+			rssi.WithLabelValues(labels...).Set(float64(*r))
+		}
+		if s := msg.SNR; s != nil {
+			snr.WithLabelValues(labels...).Set(float64(*s))
+		}
+		if n := msg.Noise; n != nil {
+			noise.WithLabelValues(labels...).Set(float64(*n))
+		}
 		if p := msg.Power0W; p != nil {
 			watts.WithLabelValues(msg.Model, id, "0", location).Set(float64(*p))
 		}
@@ -277,7 +327,7 @@ func main() {
 	flag.Parse()
 	log.Print("channelMatchers: " + channelMatchers.String())
 	log.Print("idMatchers: " + idMatchers.String())
-	prometheus.MustRegister(packetsReceived, temperature, humidity, timestamp, battery, watts)
+	prometheus.MustRegister(packetsReceived, temperature, humidity, timestamp, battery, watts, frequency, rssi, snr, noise)
 	// Add Go module build info.
 	prometheus.MustRegister(prometheus.NewBuildInfoCollector())
 

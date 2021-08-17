@@ -3,7 +3,7 @@
 # Use the official Golang image to create a build artifact.
 # This is based on Debian and sets the GOPATH to /go.
 # https://hub.docker.com/_/golang
-FROM golang:1.14 as gobuilder
+FROM golang:1.15 as gobuilder
 
 # Create and change to the app directory.
 WORKDIR /app
@@ -26,4 +26,4 @@ COPY --from=gobuilder /app/rtl_433_prometheus /
 
 EXPOSE 9550
 ENTRYPOINT ["/rtl_433_prometheus"]
-CMD ["--subprocess", "/rtl_433 -F json -M newmodel"]
+CMD ["--subprocess", "/usr/local/bin/rtl_433 -F json"]
